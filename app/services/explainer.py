@@ -1,13 +1,5 @@
 """
 Açıklama Servisi
-
-Tasarım kararı:
-- Öneriyi Qwen üretmez; öneriyi hibrit öneri motoru üretir.
-- Bu servis, hibrit motorun hesapladığı baskın sinyali ve ürün/kullanıcı bağlamını
-  kullanıcıya doğal Türkçe ile aktarır.
-- Hızlı modda dinamik template açıklaması üretir.
-- LLM_PROVIDER=huggingface ise, yalnızca kullanıcı ayrıntılı açıklama isterse Qwen
-  ile metni daha doğal ve ayrıntılı hale getirir.
 """
 
 from __future__ import annotations
@@ -29,10 +21,6 @@ class LLMExplainer:
         self._tokenizer = None
         self._model_loaded: bool = False
         self._load_error: Optional[str] = None
-
-    # ──────────────────────────────────────────
-    # Yardımcı metin fonksiyonları
-    # ──────────────────────────────────────────
 
     @staticmethod
     def _short(text: str, limit: int = 180) -> str:
@@ -64,10 +52,6 @@ class LLMExplainer:
             clean.append(s)
         return " ".join(clean[:max_sentences]).strip()
 
-    # ──────────────────────────────────────────
-    # Sinyal temelli gerekçe üretimi
-    # ──────────────────────────────────────────
-
     def natural_reasons(
         self,
         product_title: str,
@@ -76,13 +60,7 @@ class LLMExplainer:
         user_query: str = "",
         dominant_signal: str = "semantic",
     ) -> list[str]:
-        """
-        Hibrit öneri motorundaki sinyalleri kullanıcı dilindeki doğal gerekçelere dönüştürür.
 
-        Not:
-        - Burada raw kitap açıklaması uzun biçimde verilmez.
-        - Amaç kitabın konusunu özetlemek değil, öneri kararının dayandığı sinyalleri açıklamaktır.
-        """
         title = self._short(product_title, 120)
         category = self._clean_category(product_category)
         query = self._query_phrase(user_query)
@@ -208,10 +186,6 @@ class LLMExplainer:
 
         return self._sentence_join(sentences, max_sentences=4)
 
-    # ──────────────────────────────────────────
-    # Qwen yükleme ve chat-template üretimi
-    # ──────────────────────────────────────────
-
     def _load_model(self) -> bool:
         """Qwen modelini lazy-loading ile yükler."""
         if settings.llm_provider.lower() != "huggingface":
@@ -252,9 +226,6 @@ class LLMExplainer:
                     trust_remote_code=True,
                 )
 
-            # Qwen generation_config içinde sampling parametreleri varsayılan gelebiliyor.
-            # Deterministik açıklama üretimi için do_sample=False kullanıyoruz.
-            # Bu nedenle sampling parametrelerini temizleyip uyarıları önlüyoruz.
             try:
                 self._model.generation_config.do_sample = False
                 self._model.generation_config.temperature = None
@@ -280,14 +251,7 @@ class LLMExplainer:
         user_query: str,
         dominant_signal: str,
     ) -> list[dict]:
-        """
-        Qwen için sade ve sınırlı prompt hazırlar.
 
-        Önemli:
-        - Uzun kitap açıklaması prompta verilmez.
-        - Modelden kitap özeti değil, önerinin nedenini açıklaması istenir.
-        - Çıktıda başlık, madde veya prompt etiketi istenmez.
-        """
         reasons = self.natural_reasons(
             product_title=product_title,
             product_description=product_description,
@@ -388,10 +352,6 @@ Görev: Bu kitapları okuma amacı, tür, açıklama ve fiyat bilgilerine göre 
         generated = outputs[0][inputs["input_ids"].shape[-1]:]
         return self._tokenizer.decode(generated, skip_special_tokens=True).strip()
 
-    # ──────────────────────────────────────────
-    # Çıktı temizleme ve güvenlik kontrolü
-    # ──────────────────────────────────────────
-
     @staticmethod
     def _looks_bad_output(text: str) -> bool:
         """Qwen promptu kopyaladıysa, İngilizceye kaydıysa veya çok kısa kaldıysa yakalar."""
@@ -475,10 +435,6 @@ Görev: Bu kitapları okuma amacı, tür, açıklama ve fiyat bilgilerine göre 
         result = " ".join(sentences[:max_sentences]).strip()
 
         return result if result else text[:450]
-
-    # ──────────────────────────────────────────
-    # Public API
-    # ──────────────────────────────────────────
 
     def explain(
         self,
